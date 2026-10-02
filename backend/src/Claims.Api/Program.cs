@@ -83,7 +83,8 @@ app.MapAuthEndpoints();
 app.MapClaimEndpoints();
 app.MapDashboardEndpoints();
 app.MapNotificationEndpoints();
-app.MapGet("/health", () => Results.Ok(new { status = "ok", transport = messaging.Transport })).WithTags("Health");
+app.MapGet("/", () => Results.Redirect("/scalar")).ExcludeFromDescription(); // landing page = API docs
+app.MapGet("/health",() => Results.Ok(new { status = "ok", transport = messaging.Transport })).WithTags("Health");
 
 using (var scope = app.Services.CreateScope())
 {
