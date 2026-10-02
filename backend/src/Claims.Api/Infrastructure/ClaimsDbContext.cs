@@ -14,6 +14,21 @@ public class ClaimsDbContext(DbContextOptions<ClaimsDbContext> options) : DbCont
     public DbSet<ClaimProjection> ClaimProjections => Set<ClaimProjection>();
     public DbSet<Notification> Notifications => Set<Notification>();
 
+    /// <summary>
+    /// All instants are stored and returned as UTC. SQLite has no timezone-aware type and hands back
+    /// DateTimeKind.Unspecified, which would serialise without a "Z" and be misread as local time by
+    /// clients in six different time zones.
+    /// </summary>
+    protected override void ConfigureConventions(ModelConfigurationBuilder c)
+    {
+        c.Properties<DateTime>().HaveConversion<UtcConverter>();
+        c.Properties<DateTime?>().HaveConversion<UtcConverter>();
+    }
+
+    private sealed class UtcConverter() : Microsoft.EntityFrameworkCore.Storage.ValueConversion.ValueConverter<DateTime, DateTime>(
+        v => v.Kind == DateTimeKind.Utc ? v : v.ToUniversalTime(),
+        v => DateTime.SpecifyKind(v, DateTimeKind.Utc));
+
     protected override void OnModelCreating(ModelBuilder b)
     {
         b.Entity<Claim>(e =>

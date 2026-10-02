@@ -84,7 +84,8 @@ public static class DashboardEndpoints
     private static async Task<ExposureDto> GetExposure(ClaimsDbContext db, Microsoft.Extensions.Options.IOptions<ReportingOptions> reporting)
     {
         var fx = reporting.Value;
-        var open = (await db.ClaimProjections.AsNoTracking().ToListAsync()).Where(r => r.Status.IsOpen()).ToList();
+        var all = await db.ClaimProjections.AsNoTracking().ToListAsync();
+        var open = all.Where(r => r.Status.IsOpen()).ToList();
 
         decimal ToReporting(decimal amount, string currency) =>
             fx.FxRates.TryGetValue(currency, out var rate) ? Math.Round(amount * rate, 2) : 0m;
@@ -106,7 +107,7 @@ public static class DashboardEndpoints
             .ToList();
 
         return new ExposureDto(
-            open.Count > 0 ? open.Max(r => r.UpdatedAt) : null,
+            all.Count > 0 ? all.Max(r => r.UpdatedAt) : null, // last event applied, incl. closures
             fx.Currency,
             $"Converted to {fx.Currency} at static indicative rates for comparison only; local-currency figures are authoritative.",
             open.Count,
