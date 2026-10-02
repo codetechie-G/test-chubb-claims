@@ -1,0 +1,72 @@
+### Walkthrough script for the API (VS Code REST Client / Rider / Visual Studio).
+@api = http://localhost:5080/api
+
+### Log in as a claimant
+# @name alice
+POST {{api}}/auth/login
+Content-Type: application/json
+
+{ "username": "alice" }
+
+### Log in as a handler
+# @name hana
+POST {{api}}/auth/login
+Content-Type: application/json
+
+{ "username": "hana" }
+
+### Claimant reports an incident
+# @name submit
+POST {{api}}/claims
+Authorization: Bearer {{alice.response.body.token}}
+Content-Type: application/json
+
+{
+  "type": "Motor",
+  "marketCode": "SG",
+  "incidentDate": "2026-09-30",
+  "incidentLocation": "CTE near Braddell",
+  "description": "Rear-ended in stop-start traffic.",
+  "claimedAmount": 2500
+}
+
+### Handler sees the unassigned queue (oldest first)
+GET {{api}}/claims?scope=queue
+Authorization: Bearer {{hana.response.body.token}}
+
+### Handler picks it up (If-Match = version they were looking at)
+POST {{api}}/claims/{{submit.response.body.id}}/pickup
+Authorization: Bearer {{hana.response.body.token}}
+If-Match: "1"
+
+### Same request again -> 409 (already picked up) or 412 (stale version)
+POST {{api}}/claims/{{submit.response.body.id}}/pickup
+Authorization: Bearer {{hana.response.body.token}}
+If-Match: "1"
+
+### Request information from the claimant
+POST {{api}}/claims/{{submit.response.body.id}}/information-requests
+Authorization: Bearer {{hana.response.body.token}}
+Content-Type: application/json
+
+{ "question": "Please upload the dashcam footage." }
+
+### Claimant's view: no reserve, no internal events
+GET {{api}}/claims/{{submit.response.body.id}}
+Authorization: Bearer {{alice.response.body.token}}
+
+### Claimant's notifications (written by the notifier consumer)
+GET {{api}}/notifications
+Authorization: Bearer {{alice.response.body.token}}
+
+### Team workload (read model fed by events)
+GET {{api}}/dashboard/workload
+Authorization: Bearer {{hana.response.body.token}}
+
+### Liability exposure by market
+GET {{api}}/dashboard/exposure
+Authorization: Bearer {{hana.response.body.token}}
+
+### Claimant trying a staff endpoint -> 403
+GET {{api}}/dashboard/exposure
+Authorization: Bearer {{alice.response.body.token}}
