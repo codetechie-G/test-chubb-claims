@@ -112,6 +112,19 @@ public class ClaimLifecycleTests
     }
 
     [Fact]
+    public void Declining_withdraws_open_questions_and_blocks_late_answers()
+    {
+        var claim = NewClaim();
+        claim.PickUp(Handler, Now);
+        var question = claim.RequestInformation(Handler, "Photos?", Now);
+
+        claim.Reject(Handler, "Not covered", Now);
+
+        Assert.Equal(InformationRequestStatus.Withdrawn, question.Status);
+        Assert.Throws<DomainException>(() => claim.ProvideInformation(Claimant, question.Id, "late", Now));
+    }
+
+    [Fact]
     public void Rejected_claim_is_terminal_and_releases_reserve()
     {
         var claim = NewClaim();

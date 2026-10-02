@@ -30,12 +30,14 @@ public class InformationRequest
 
     internal void Answer(string response, DateTime now)
     {
-        if (Status == InformationRequestStatus.Answered)
-            throw new DomainException("This information request has already been answered.");
+        if (Status != InformationRequestStatus.Open)
+            throw new DomainException("This information request is no longer open.");
         Response = response;
         RespondedAt = now;
         Status = InformationRequestStatus.Answered;
     }
+
+    internal void Withdraw() => Status = InformationRequestStatus.Withdrawn;
 }
 
 /// <summary>Append-only audit trail of everything that happened to a claim.</summary>
@@ -76,10 +78,7 @@ public static class ClaimEventTypes
     public const string Rejected = "ClaimRejected";
 }
 
-/// <summary>
-/// Raised by the aggregate; turned into an outbox message on save. Carries a full snapshot of the
-/// claim (event-carried state transfer) so consumers don't need to call back into the claims API.
-/// </summary>
+// Carries a full snapshot so consumers never need to call back into the API.
 public sealed record ClaimDomainEvent(
     Guid EventId,
     string EventType,

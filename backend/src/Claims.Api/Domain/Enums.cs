@@ -6,11 +6,7 @@ public enum ClaimType
     Property
 }
 
-/// <summary>
-/// Lifecycle: Submitted -> UnderAssessment <-> AwaitingInformation -> Approved -> Settled,
-/// with Rejected reachable from UnderAssessment / AwaitingInformation.
-/// Settled and Rejected are terminal.
-/// </summary>
+// Submitted -> UnderAssessment <-> AwaitingInformation -> Approved -> Settled; Rejected is terminal too.
 public enum ClaimStatus
 {
     Submitted,
@@ -24,7 +20,8 @@ public enum ClaimStatus
 public enum InformationRequestStatus
 {
     Open,
-    Answered
+    Answered,
+    Withdrawn // claim was closed before the claimant answered
 }
 
 public static class ClaimStatusExtensions

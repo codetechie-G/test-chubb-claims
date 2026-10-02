@@ -35,7 +35,6 @@ type Panel = 'reserve' | 'info' | 'approve' | 'reject' | null;
         <div class="stat"><span class="muted">Handler</span><strong>{{ c.assigneeName ?? 'Unassigned' }}</strong></div>
       </div>
 
-      <!-- Actions: only what the current state machine allows for this user -->
       <section class="card actions-card">
         @if (c.status === 'Submitted') {
           <p>This claim is waiting in the queue.</p>
@@ -128,8 +127,10 @@ type Panel = 'reserve' | 'info' | 'approve' | 'reject' | null;
               <div><strong>Q:</strong> {{ r.question }} <span class="muted small">({{ r.requestedByName }}, {{ dateTime(r.requestedAt) }})</span></div>
               @if (r.status === 'Answered') {
                 <div><strong>A:</strong> {{ r.response }} <span class="muted small">({{ dateTime(r.respondedAt!) }})</span></div>
-              } @else {
+              } @else if (r.status === 'Open') {
                 <div class="tag warn">Awaiting claimant</div>
+              } @else {
+                <div class="muted small">Withdrawn when the claim was closed</div>
               }
             </div>
           } @empty {
@@ -166,7 +167,7 @@ export class StaffClaimDetailPage {
 
   constructor() {
     poll(this.id, (id) => this.api.get(id), (e) => this.error.set(describeError(e))).subscribe((c) => {
-      // Don't yank the form out from under a user mid-edit: only refresh while no panel is open.
+      // Don't refresh under an open form.
       if (this.panel() === null || this.claim()?.id !== c.id) this.claim.set(c);
     });
   }
@@ -190,7 +191,7 @@ export class StaffClaimDetailPage {
       error: (e) => {
         this.error.set(describeError(e));
         this.busy.set(false);
-        // 409/412 = someone else changed it; show the latest state so the user can decide again.
+        // Someone else changed it: reload so the user sees the current state.
         if (e instanceof HttpErrorResponse && (e.status === 409 || e.status === 412)) {
           this.panel.set(null);
           this.api.get(this.id()).subscribe((c) => this.claim.set(c));

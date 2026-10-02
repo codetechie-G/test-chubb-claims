@@ -1,6 +1,4 @@
-// Mirrors the backend DTOs (backend/src/Claims.Api/Features/Dtos.cs). The backend owns the
-// contract and publishes it as OpenAPI at /openapi/v1.json; next step would be generating
-// these types from that document instead of maintaining them by hand.
+// Mirrors backend Features/Dtos.cs (OpenAPI at /openapi/v1.json). TODO: generate from the spec.
 
 export type Role = 'Claimant' | 'Handler';
 export type ClaimType = 'Motor' | 'Property';
@@ -60,7 +58,7 @@ export interface InformationRequest {
   question: string;
   requestedByName: string;
   requestedAt: string;
-  status: 'Open' | 'Answered';
+  status: 'Open' | 'Answered' | 'Withdrawn';
   response: string | null;
   respondedAt: string | null;
 }

@@ -1,9 +1,6 @@
 namespace Claims.Api.Domain;
 
-/// <summary>
-/// The six APAC markets. Each claim is booked in its market's local currency;
-/// we never sum across currencies without an explicit conversion.
-/// </summary>
+// Claims are booked in the market currency; never summed across currencies without conversion.
 public sealed record Market(string Code, string Name, string Currency)
 {
     public static readonly IReadOnlyList<Market> All =

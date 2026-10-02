@@ -1,11 +1,6 @@
 namespace Claims.Api.Domain;
 
-/// <summary>
-/// Claim aggregate root. All state changes go through methods on this class so the
-/// lifecycle rules live in one place; each change bumps <see cref="Version"/> (used as the
-/// optimistic-concurrency token) and raises a domain event that is persisted to the outbox
-/// in the same transaction.
-/// </summary>
+// Aggregate root: every state change goes through a method here, bumps Version and raises an event.
 public class Claim
 {
     private readonly List<InformationRequest> _informationRequests = [];
@@ -124,6 +119,7 @@ public class Claim
     public void ProvideInformation(Actor claimant, Guid requestId, string response, DateTime now)
     {
         if (claimant.Id != ClaimantId) throw new DomainException("Only the claimant can respond to this request.");
+        if (!Status.IsOpen()) throw new DomainException($"Claim {Reference} is closed.");
         var request = _informationRequests.FirstOrDefault(r => r.Id == requestId)
                       ?? throw new DomainException("Information request not found.");
         if (string.IsNullOrWhiteSpace(response)) throw new DomainException("A response is required.");
@@ -164,6 +160,8 @@ public class Claim
         EnsureStatus(ClaimStatus.UnderAssessment, ClaimStatus.AwaitingInformation);
         if (string.IsNullOrWhiteSpace(reason)) throw new DomainException("A rejection reason is required.");
 
+        foreach (var open in _informationRequests.Where(r => r.Status == InformationRequestStatus.Open))
+            open.Withdraw();
         ReserveAmount = 0m;
         DecisionReason = reason.Trim();
         Status = ClaimStatus.Rejected;
