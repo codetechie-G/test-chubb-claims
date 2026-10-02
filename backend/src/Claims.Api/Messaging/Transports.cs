@@ -87,9 +87,18 @@ public sealed class KafkaTransport : IMessageTransport, IDisposable
             {
                 while (!ct.IsCancellationRequested)
                 {
-                    var result = consumer.Consume(ct);
-                    await onMessage(result.Message.Value, ct);
-                    consumer.Commit(result);
+                    try
+                    {
+                        var result = consumer.Consume(ct);
+                        await onMessage(result.Message.Value, ct);
+                        consumer.Commit(result);
+                    }
+                    catch (KafkaException ex) when (!ex.Error.IsFatal)
+                    {
+                        // Broker unavailable, topic not created yet, rebalance in progress... keep going.
+                        _logger.LogWarning("Kafka consumer {Group}: {Reason}; retrying", groupId, ex.Error.Reason);
+                        await Task.Delay(TimeSpan.FromSeconds(2), ct);
+                    }
                 }
             }
             catch (OperationCanceledException) { }
