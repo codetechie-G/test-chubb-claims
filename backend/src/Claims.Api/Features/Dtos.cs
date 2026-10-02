@@ -2,7 +2,7 @@ using Claims.Api.Domain;
 
 namespace Claims.Api.Features;
 
-// ---- Requests -------------------------------------------------------------------------------
+// Requests
 
 public sealed record SubmitClaimRequest(
     ClaimType Type,
@@ -19,7 +19,7 @@ public sealed record ApproveClaimRequest(decimal SettlementAmount, string? Note)
 public sealed record RejectClaimRequest(string Reason);
 public sealed record LoginRequest(string Username);
 
-// ---- Responses ------------------------------------------------------------------------------
+// Responses
 
 public sealed record PagedResult<T>(IReadOnlyList<T> Items, int Total, int Page, int PageSize);
 

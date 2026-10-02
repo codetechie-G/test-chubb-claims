@@ -16,7 +16,7 @@ const PROGRESS: ClaimStatus[] = ['Submitted', 'UnderAssessment', 'Approved', 'Se
       <div class="alert error">{{ error() }}</div>
     }
     @if (justSubmitted) {
-      <div class="alert ok">Thanks — your claim has been submitted. We'll notify you here as it progresses.</div>
+      <div class="alert ok">Thanks, your claim has been submitted. We'll notify you here as it progresses.</div>
     }
 
     @if (claim(); as c) {

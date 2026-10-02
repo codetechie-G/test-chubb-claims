@@ -6,7 +6,7 @@ import { LoginResponse, Role, User } from './api.models';
 
 const STORAGE_KEY = 'claims.session';
 
-/** Holds the signed-in user. Session-scoped storage so closing the tab signs out. */
+// Session storage, so closing the tab signs out.
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private readonly http = inject(HttpClient);
@@ -58,7 +58,7 @@ export class AuthService {
   }
 }
 
-/** Attaches the bearer token; an expired/invalid token sends the user back to login. */
+// Adds the bearer token; a 401 sends the user back to login.
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const auth = inject(AuthService);
   const token = auth.token();
@@ -71,10 +71,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
   );
 };
 
-/**
- * Route guard: only users with the given role can even load that feature area. This is UX only;
- * the API enforces the same rules independently.
- */
+// UX only: the API enforces the same role rules.
 export const requireRole =
   (role: Role): CanMatchFn =>
   () => {

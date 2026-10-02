@@ -4,12 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Claims.Api.Messaging;
 
-/// <summary>
-/// Polls the outbox and publishes unsent events in insertion order. Stops at the first failure
-/// so per-claim ordering is preserved; the row is retried on the next tick. Publishing is
-/// at-least-once (a crash between publish and mark-as-sent re-sends), which is why consumers
-/// are idempotent.
-/// </summary>
+// Publishes outbox rows in order; stops at the first failure so per-claim ordering holds.
 public sealed class OutboxDispatcher(
     IServiceScopeFactory scopes,
     IMessageTransport transport,
@@ -61,11 +56,7 @@ public sealed class OutboxDispatcher(
     }
 }
 
-/// <summary>
-/// Runs one consume loop per registered consumer group. Each message is handled in its own DI
-/// scope with a small retry; after that it is logged as poison and skipped so one bad message
-/// cannot block the partition (production would route it to a dead-letter topic).
-/// </summary>
+// One consume loop per consumer group, with a small retry before a message is skipped.
 public sealed class ConsumerHost(
     IEnumerable<ConsumerRegistration> registrations,
     IMessageTransport transport,
@@ -75,7 +66,7 @@ public sealed class ConsumerHost(
     private const int MaxAttempts = 3;
 
     protected override Task ExecuteAsync(CancellationToken ct) =>
-        Task.WhenAll(registrations.Select(r => transport.ConsumeAsync(r.GroupId, (payload, token) => HandleAsync(r, payload, token), ct)));
+        Task.WhenAll(registrations.Select(registration => transport.ConsumeAsync(registration.GroupId, (payload, token) => HandleAsync(registration, payload, token), ct)));
 
     private async Task HandleAsync(ConsumerRegistration registration, string payload, CancellationToken ct)
     {

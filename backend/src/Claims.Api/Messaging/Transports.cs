@@ -12,16 +12,12 @@ public sealed class MessagingOptions
     public string BootstrapServers { get; set; } = "localhost:9092";
 }
 
-/// <summary>
-/// Thin seam over the broker so the app runs locally without Kafka and the same consumers run
-/// unchanged against a real cluster. Semantics we rely on: per-key ordering, at-least-once.
-/// </summary>
+// Lets the app run without Kafka; relies only on per-key ordering and at-least-once delivery.
 public interface IMessageTransport
 {
     Task PublishAsync(string key, string payload, CancellationToken ct);
 
-    /// <summary>Runs until cancelled, invoking <paramref name="onMessage"/> for each message in the group.
-    /// The offset is committed only after the callback returns.</summary>
+    // Offset is committed only after onMessage returns.
     Task ConsumeAsync(string groupId, Func<string, CancellationToken, Task> onMessage, CancellationToken ct);
 }
 
@@ -95,7 +91,7 @@ public sealed class KafkaTransport : IMessageTransport, IDisposable
                     }
                     catch (KafkaException ex) when (!ex.Error.IsFatal)
                     {
-                        // Broker unavailable, topic not created yet, rebalance in progress... keep going.
+                        // Broker down, topic missing or rebalancing: retry.
                         _logger.LogWarning("Kafka consumer {Group}: {Reason}; retrying", groupId, ex.Error.Reason);
                         await Task.Delay(TimeSpan.FromSeconds(2), ct);
                     }

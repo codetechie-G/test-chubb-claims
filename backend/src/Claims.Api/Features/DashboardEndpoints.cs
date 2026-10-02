@@ -33,10 +33,7 @@ public sealed record ExposureDto(
     DateTime? AsOf, string ReportingCurrency, string FxNote, int OpenClaims, decimal TotalReserveInReportingCurrency,
     IReadOnlyList<MarketExposure> Markets, IReadOnlyList<StatusExposure> ByStatus);
 
-/// <summary>
-/// Manager / team views. Served entirely from the event-fed <see cref="ClaimProjection"/> read model,
-/// so they are eventually consistent (AsOf says how fresh) and never load the transactional tables.
-/// </summary>
+// Served from the event-fed projection, so figures are eventually consistent (see AsOf).
 public static class DashboardEndpoints
 {
     public static void MapDashboardEndpoints(this IEndpointRouteBuilder app)
@@ -52,7 +49,7 @@ public static class DashboardEndpoints
     {
         var now = clock.GetUtcNow().UtcDateTime;
         var since = now.AddDays(-30);
-        // Small data set; aggregate in memory (SQLite can't aggregate decimals/dates server-side via EF).
+        // SQLite can't aggregate decimals in SQL, so aggregate in memory.
         var rows = await db.ClaimProjections.AsNoTracking()
             .Where(p => p.ClosedAt == null || p.ClosedAt >= since)
             .ToListAsync();
@@ -60,12 +57,12 @@ public static class DashboardEndpoints
         var open = rows.Where(r => r.Status.IsOpen()).ToList();
         var unassigned = open.Where(r => r.Status == ClaimStatus.Submitted).ToList();
 
-        var handlers = DemoUsers.All.Where(u => u.Role == Roles.Handler).Select(h =>
+        var handlers = DemoUsers.All.Where(u => u.Role == Roles.Handler).Select(handler =>
         {
-            var mine = open.Where(r => r.AssigneeId == h.Id).ToList();
-            var closed = rows.Where(r => r.AssigneeId == h.Id && r.ClosedAt is not null).ToList();
+            var mine = open.Where(r => r.AssigneeId == handler.Id).ToList();
+            var closed = rows.Where(r => r.AssigneeId == handler.Id && r.ClosedAt is not null).ToList();
             return new HandlerWorkload(
-                h.Id, h.Name, mine.Count,
+                handler.Id, handler.Name, mine.Count,
                 mine.Count(r => r.Status == ClaimStatus.UnderAssessment),
                 mine.Count(r => r.Status == ClaimStatus.AwaitingInformation),
                 mine.Count(r => r.Status == ClaimStatus.Approved),
@@ -81,37 +78,37 @@ public static class DashboardEndpoints
             handlers);
     }
 
-    private static async Task<ExposureDto> GetExposure(ClaimsDbContext db, Microsoft.Extensions.Options.IOptions<ReportingOptions> reporting)
+    private static async Task<ExposureDto> GetExposure(ClaimsDbContext db, Microsoft.Extensions.Options.IOptions<ReportingOptions> reportingOptions)
     {
-        var fx = reporting.Value;
+        var reporting = reportingOptions.Value;
         var all = await db.ClaimProjections.AsNoTracking().ToListAsync();
         var open = all.Where(r => r.Status.IsOpen()).ToList();
 
         decimal ToReporting(decimal amount, string currency) =>
-            fx.FxRates.TryGetValue(currency, out var rate) ? Math.Round(amount * rate, 2) : 0m;
+            reporting.FxRates.TryGetValue(currency, out var rate) ? Math.Round(amount * rate, 2) : 0m;
 
-        var markets = Market.All.Select(m =>
+        var markets = Market.All.Select(market =>
         {
-            var inMarket = open.Where(r => r.MarketCode == m.Code).ToList();
+            var inMarket = open.Where(r => r.MarketCode == market.Code).ToList();
             var reserve = inMarket.Sum(r => r.ReserveAmount);
             return new MarketExposure(
-                m.Code, m.Name, m.Currency, inMarket.Count, reserve, ToReporting(reserve, m.Currency),
+                market.Code, market.Name, market.Currency, inMarket.Count, reserve, ToReporting(reserve, market.Currency),
                 Enum.GetValues<ClaimType>()
-                    .Select(t => new ExposureByType(t, inMarket.Count(r => r.Type == t), inMarket.Where(r => r.Type == t).Sum(r => r.ReserveAmount)))
+                    .Select(type => new ExposureByType(type, inMarket.Count(r => r.Type == type), inMarket.Where(r => r.Type == type).Sum(r => r.ReserveAmount)))
                     .ToList());
         }).ToList();
 
         var byStatus = open.GroupBy(r => r.Status)
-            .Select(g => new StatusExposure(g.Key, g.Count(), g.Sum(r => ToReporting(r.ReserveAmount, r.Currency))))
+            .Select(group => new StatusExposure(group.Key, group.Count(), group.Sum(r => ToReporting(r.ReserveAmount, r.Currency))))
             .OrderBy(s => s.Status)
             .ToList();
 
         return new ExposureDto(
             all.Count > 0 ? all.Max(r => r.UpdatedAt) : null, // last event applied, incl. closures
-            fx.Currency,
-            $"Converted to {fx.Currency} at static indicative rates for comparison only; local-currency figures are authoritative.",
+            reporting.Currency,
+            $"Converted to {reporting.Currency} at static indicative rates for comparison only; local-currency figures are authoritative.",
             open.Count,
-            markets.Sum(m => m.ReserveInReportingCurrency),
+            markets.Sum(market => market.ReserveInReportingCurrency),
             markets,
             byStatus);
     }

@@ -14,11 +14,7 @@ public static class Roles
 
 public sealed record DemoUser(string Id, string Username, string Name, string Role);
 
-/// <summary>
-/// Stand-in identity provider. In production claimants would sign in via a customer IdP (e.g.
-/// Azure AD B2C) and staff via corporate SSO; the API only cares about the resulting sub/name/role
-/// claims, so swapping this out does not touch the endpoints.
-/// </summary>
+// Demo users only. Real setup: customer IdP for claimants, corporate SSO for staff.
 public static class DemoUsers
 {
     public static readonly IReadOnlyList<DemoUser> All =

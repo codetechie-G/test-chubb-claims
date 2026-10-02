@@ -55,7 +55,7 @@ Tool: Claude Code (Claude Opus 5.5) in VS Code. The AI generated the bulk of the
 10. **Test-harness false alarms, kept honest.** The first browser probes reported "hangs". The causes were headless Edge in the sandbox and new tabs having no `sessionStorage` session, not bugs in the app. Re-verified in Chrome before drawing conclusions instead of "fixing" working code.
 
 ### Verification performed
-- `dotnet test`: 15 passing (9 domain, 6 API integration)
+- `dotnet test`: 16 passing (10 domain, 6 API integration)
 - Manual API smoke test with curl:
   - concurrent pickup → one 200 and one 409
   - stale `If-Match` → 412
@@ -64,6 +64,11 @@ Tool: Claude Code (Claude Opus 5.5) in VS Code. The AI generated the bulk of the
   - bad market → 400 with field error
   - malformed JSON → 400
 - Scripted browser E2E (Playwright and Chrome) covered the full claimant↔handler flow, notifications, the dashboard, dark mode and a 390px mobile width (no horizontal scroll), the role-guard redirect, and showed zero console errors.
+
+### Second review pass
+- **Bug: declining a claim with an open question.** The question stayed "Open", so the claimant saw "Action needed" on a declined claim and could still answer it. Now declining withdraws open questions (new `Withdrawn` status) and answers on closed claims are rejected. A test was added first.
+- **Gap: only async `SaveChanges` wrote the outbox.** A synchronous save would have dropped events. Both paths now share one staging method.
+- **Readability:** long doc comments cut to one-line "why" comments; single-letter names in non-trivial code renamed (`snapshot`, `registration`, `reporting`, `query`, `currentKey`); the Angular CLI boilerplate README replaced.
 
 ### Things I would challenge the AI on next
 - The outbox dispatcher assumes a single instance. Fine for a demo; needs `SKIP LOCKED` or CDC for horizontal scale.

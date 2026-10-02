@@ -46,14 +46,14 @@ export class StatusBadge {
   imports: [],
   template: `
     <ol class="timeline">
-      @for (h of reversed(); track h.version) {
+      @for (entry of reversed(); track entry.version) {
         <li>
           <div class="tl-head">
-            <strong>{{ label(h.eventType) }}</strong>
-            <span class="muted">{{ h.actorName }} · {{ fmt(h.occurredAt) }}</span>
+            <strong>{{ label(entry.eventType) }}</strong>
+            <span class="muted">{{ entry.actorName }} · {{ formatDateTime(entry.occurredAt) }}</span>
           </div>
-          @if (h.detail) {
-            <div class="tl-detail">{{ h.detail }}</div>
+          @if (entry.detail) {
+            <div class="tl-detail">{{ entry.detail }}</div>
           }
         </li>
       }
@@ -64,24 +64,22 @@ export class Timeline {
   readonly history = input.required<{ version: number; eventType: string; actorName: string; occurredAt: string; detail: string | null }[]>();
   protected readonly reversed = computed(() => [...this.history()].reverse());
   protected label = eventLabel;
-  protected fmt = (iso: string) => formatDateTime(iso);
+  protected formatDateTime = formatDateTime;
 }
 
-/** API timestamps are UTC; tolerate a missing offset rather than misreading them as local time. */
+// Treat timestamps without an offset as UTC.
 export function parseUtc(iso: string): Date {
   return new Date(/(Z|[+-]\d\d:\d\d)$/i.test(iso) ? iso : iso + 'Z');
 }
 
-/** Displayed in the viewer's local time zone. */
 export function formatDateTime(iso: string): string {
-  const d = parseUtc(iso);
-  return d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  return parseUtc(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 }
 
 export function formatDate(iso: string): string {
-  // Date-only values (incident date) are calendar dates, not instants: don't shift them.
-  const d = iso.length === 10 ? new Date(iso + 'T00:00:00') : parseUtc(iso);
-  return d.toLocaleDateString(undefined, { dateStyle: 'medium' });
+  // Date-only values are calendar dates; don't shift them by time zone.
+  const date = iso.length === 10 ? new Date(iso + 'T00:00:00') : parseUtc(iso);
+  return date.toLocaleDateString(undefined, { dateStyle: 'medium' });
 }
 
 export function formatMoney(amount: number | null | undefined, currency: string): string {

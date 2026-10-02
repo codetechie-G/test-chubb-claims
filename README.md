@@ -32,7 +32,7 @@ On first start the API creates `claims.db` and seeds 13 demo claims. To reset, d
 
 There's no password. The login picker stands in for SSO or a customer IdP (see Shortcuts).
 
-**Tests:** `cd backend && dotnet test`. There are 15 tests. Unit tests cover the state machine. Integration tests run the real API and cover access control, concurrent pickup, stale `If-Match`, and events reaching the read model and notifications.
+**Tests:** `cd backend && dotnet test`. There are 16 tests. Unit tests cover the state machine. Integration tests run the real API and cover access control, concurrent pickup, stale `If-Match`, and events reaching the read model and notifications.
 
 **With real Kafka:** `docker compose up -d`, then `dotnet run --launch-profile http --Messaging:Transport=Kafka`. Kafka UI runs at http://localhost:8085.
 > Docker wasn't available on the machine this was built on, so the Kafka path was **not run end-to-end**. It compiles and uses the same consumers as the tested in-process transport.

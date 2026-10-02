@@ -4,12 +4,7 @@ using Claims.Api.Domain;
 
 namespace Claims.Api.Messaging;
 
-/// <summary>
-/// Public integration-event contract published on the <c>claims.claim-events</c> topic.
-/// Deliberately separate from the internal domain event so the wire format can be versioned
-/// independently of the aggregate. Keyed by ClaimId so all events for one claim land on the
-/// same partition and are consumed in order.
-/// </summary>
+// Wire contract for the claims.claim-events topic, versioned separately from the domain event.
 public sealed record ClaimEventMessage(
     int SchemaVersion,
     Guid EventId,

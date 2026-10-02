@@ -4,10 +4,6 @@ import { Exposure, Workload } from '../../core/api.models';
 import { ClaimsApi, describeError, NO_KEY, poll } from '../../core/claims-api';
 import { formatDateTime, formatMoney, statusLabel } from '../../shared/ui';
 
-/**
- * Team workload + outstanding liability. Served from the event-fed read model, so figures are
- * eventually consistent; "as of" makes that explicit rather than pretending it's real-time.
- */
 @Component({
   selector: 'app-dashboard',
   template: `

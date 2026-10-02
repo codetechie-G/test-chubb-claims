@@ -8,11 +8,7 @@ using Claim = Claims.Api.Domain.Claim;
 
 namespace Claims.Api.Features;
 
-/// <summary>
-/// Synchronous command/query API for claims. Every command is a REST call because the user is
-/// waiting on the outcome (accepted, or rejected with a reason); side effects that nobody waits
-/// on (dashboards, notifications) are driven by the events these commands emit.
-/// </summary>
+// Commands are REST because the user waits for the result; side effects run off the events.
 public static class ClaimEndpoints
 {
     public static void MapClaimEndpoints(this IEndpointRouteBuilder app)
@@ -127,10 +123,7 @@ public static class ClaimEndpoints
         return TypedResults.Created($"/api/claims/{claim.Id}", claim.ToDetail(forHandler: false));
     }
 
-    /// <summary>
-    /// Load -> check access -> check If-Match -> apply domain method -> save (outbox in same tx).
-    /// A concurrent writer is caught by the Version concurrency token (mapped to 409 globally).
-    /// </summary>
+    // Load, check access and If-Match, apply the domain method, save (outbox in the same transaction).
     private static async Task<IResult> Mutate(
         Guid id, ClaimsPrincipal user, HttpContext http, ClaimsDbContext db, TimeProvider clock,
         Action<Claim, Actor, DateTime> action)
@@ -154,11 +147,11 @@ public static class ClaimEndpoints
 
     private static Task<Claim?> LoadAsync(ClaimsDbContext db, Guid id, bool tracking)
     {
-        var q = db.Claims.Include(c => c.InformationRequests).Include(c => c.History).AsSplitQuery();
-        return (tracking ? q : q.AsNoTracking()).FirstOrDefaultAsync(c => c.Id == id);
+        var query = db.Claims.Include(c => c.InformationRequests).Include(c => c.History).AsSplitQuery();
+        return (tracking ? query : query.AsNoTracking()).FirstOrDefaultAsync(c => c.Id == id);
     }
 
-    // Claimants can only see their own claims; we return 404 (not 403) so claim ids can't be probed.
+    // 404 rather than 403 so claim ids can't be probed.
     private static bool CanSee(ClaimsPrincipal user, Claim claim) =>
         user.IsHandler() || claim.ClaimantId == user.ToActor().Id;
 

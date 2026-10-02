@@ -35,7 +35,7 @@ export class ClaimsApi {
 
   list(query: ClaimQuery = {}): Observable<PagedResult<ClaimSummary>> {
     let params = new HttpParams();
-    for (const [k, v] of Object.entries(query)) if (v !== undefined && v !== '') params = params.set(k, String(v));
+    for (const [name, value] of Object.entries(query)) if (value !== undefined && value !== '') params = params.set(name, String(value));
     return this.http.get<PagedResult<ClaimSummary>>('/api/claims', { params });
   }
 
@@ -51,8 +51,7 @@ export class ClaimsApi {
     return this.http.post<ClaimDetail>(`/api/claims/${claimId}/information-requests/${requestId}/response`, { response });
   }
 
-  // Staff commands send If-Match with the version the user was looking at, so acting on a
-  // stale screen fails with 412 instead of silently overwriting someone else's change.
+  // If-Match: acting on a stale screen returns 412 instead of overwriting a colleague's change.
   pickUp(c: Versioned) {
     return this.command(c, 'post', 'pickup', {});
   }
@@ -97,22 +96,17 @@ export class ClaimsApi {
 /** Turns an API error into a sentence for the user (ProblemDetails aware). */
 export function describeError(err: unknown): string {
   if (err instanceof HttpErrorResponse) {
-    const p = err.error as Problem | null;
-    if (p?.errors) return Object.values(p.errors).flat().join(' ');
-    if (p?.detail) return p.detail;
-    if (p?.title) return p.title;
+    const problem = err.error as Problem | null;
+    if (problem?.errors) return Object.values(problem.errors).flat().join(' ');
+    if (problem?.detail) return problem.detail;
+    if (problem?.title) return problem.title;
     if (err.status === 0) return 'Cannot reach the server. Is the API running?';
     return `Request failed (${err.status}).`;
   }
   return 'Something went wrong.';
 }
 
-/**
- * Re-runs a request on an interval while the component is alive. Claims change on human
- * timescales (minutes/hours), so a short poll is a deliberate, simple choice over SSE/WebSockets.
- * Pass the source's input as a signal so the poll restarts immediately when it changes
- * (e.g. navigating between claims reuses the same detail component).
- */
+// Polls while the component is alive and restarts when `key` changes (e.g. a new claim id).
 export function poll<K, T>(
   key: Signal<K>,
   source: (key: K) => Observable<T>,
@@ -121,9 +115,9 @@ export function poll<K, T>(
 ): Observable<T> {
   const destroyRef = inject(DestroyRef);
   return toObservable(key).pipe(
-    switchMap((k) => timer(0, intervalMs).pipe(map(() => k))),
-    // A failed tick is reported but doesn't kill the loop; the next tick retries.
-    switchMap((k) => source(k).pipe(catchError((e) => (onError?.(e), EMPTY)))),
+    switchMap((currentKey) => timer(0, intervalMs).pipe(map(() => currentKey))),
+    // Report errors but keep polling.
+    switchMap((currentKey) => source(currentKey).pipe(catchError((err) => (onError?.(err), EMPTY)))),
     takeUntilDestroyed(destroyRef),
   );
 }

@@ -2,6 +2,7 @@ using System.Text.Json;
 using Claims.Api.Domain;
 using Claims.Api.Messaging;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace Claims.Api.Infrastructure;
 
@@ -14,92 +15,99 @@ public class ClaimsDbContext(DbContextOptions<ClaimsDbContext> options) : DbCont
     public DbSet<ClaimProjection> ClaimProjections => Set<ClaimProjection>();
     public DbSet<Notification> Notifications => Set<Notification>();
 
-    /// <summary>
-    /// All instants are stored and returned as UTC. SQLite has no timezone-aware type and hands back
-    /// DateTimeKind.Unspecified, which would serialise without a "Z" and be misread as local time by
-    /// clients in six different time zones.
-    /// </summary>
-    protected override void ConfigureConventions(ModelConfigurationBuilder c)
+    // SQLite returns DateTimeKind.Unspecified; force UTC so the API always emits "Z" timestamps.
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
-        c.Properties<DateTime>().HaveConversion<UtcConverter>();
-        c.Properties<DateTime?>().HaveConversion<UtcConverter>();
+        configurationBuilder.Properties<DateTime>().HaveConversion<UtcDateTimeConverter>();
+        configurationBuilder.Properties<DateTime?>().HaveConversion<UtcDateTimeConverter>();
     }
 
-    private sealed class UtcConverter() : Microsoft.EntityFrameworkCore.Storage.ValueConversion.ValueConverter<DateTime, DateTime>(
-        v => v.Kind == DateTimeKind.Utc ? v : v.ToUniversalTime(),
-        v => DateTime.SpecifyKind(v, DateTimeKind.Utc));
+    private sealed class UtcDateTimeConverter() : ValueConverter<DateTime, DateTime>(
+        value => value.Kind == DateTimeKind.Utc ? value : value.ToUniversalTime(),
+        value => DateTime.SpecifyKind(value, DateTimeKind.Utc));
 
-    protected override void OnModelCreating(ModelBuilder b)
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        b.Entity<Claim>(e =>
+        modelBuilder.Entity<Claim>(claim =>
         {
-            e.HasKey(c => c.Id);
-            e.HasIndex(c => c.Reference).IsUnique();
-            e.HasIndex(c => c.ClaimantId);
-            e.HasIndex(c => new { c.Status, c.AssigneeId });
-            e.Property(c => c.Type).HasConversion<string>();
-            e.Property(c => c.Status).HasConversion<string>();
-            e.Property(c => c.Version).IsConcurrencyToken();
-            e.Ignore(c => c.PendingEvents);
-            e.HasMany(c => c.InformationRequests).WithOne().HasForeignKey(r => r.ClaimId);
-            e.HasMany(c => c.History).WithOne().HasForeignKey(h => h.ClaimId);
+            claim.HasKey(c => c.Id);
+            claim.HasIndex(c => c.Reference).IsUnique();
+            claim.HasIndex(c => c.ClaimantId);
+            claim.HasIndex(c => new { c.Status, c.AssigneeId });
+            claim.Property(c => c.Type).HasConversion<string>();
+            claim.Property(c => c.Status).HasConversion<string>();
+            claim.Property(c => c.Version).IsConcurrencyToken();
+            claim.Ignore(c => c.PendingEvents);
+            claim.HasMany(c => c.InformationRequests).WithOne().HasForeignKey(r => r.ClaimId);
+            claim.HasMany(c => c.History).WithOne().HasForeignKey(h => h.ClaimId);
         });
 
-        b.Entity<InformationRequest>(e =>
+        modelBuilder.Entity<InformationRequest>(request =>
         {
-            e.HasKey(r => r.Id);
-            // Ids are assigned by the domain; without this EF treats new children as "Modified".
-            e.Property(r => r.Id).ValueGeneratedNever();
-            e.Property(r => r.Status).HasConversion<string>();
+            request.HasKey(r => r.Id);
+            // Id is set by the domain; without this EF would treat new requests as updates.
+            request.Property(r => r.Id).ValueGeneratedNever();
+            request.Property(r => r.Status).HasConversion<string>();
         });
 
-        b.Entity<ClaimHistoryEntry>(e => e.HasIndex(h => new { h.ClaimId, h.Version }));
+        modelBuilder.Entity<ClaimHistoryEntry>(history => history.HasIndex(h => new { h.ClaimId, h.Version }));
 
-        b.Entity<OutboxMessage>(e =>
+        modelBuilder.Entity<OutboxMessage>(outbox =>
         {
-            e.HasIndex(o => o.PublishedAt);
-            e.HasIndex(o => o.EventId).IsUnique();
+            outbox.HasIndex(o => o.PublishedAt);
+            outbox.HasIndex(o => o.EventId).IsUnique();
         });
 
-        b.Entity<ClaimProjection>(e =>
+        modelBuilder.Entity<ClaimProjection>(projection =>
         {
-            e.HasKey(p => p.ClaimId);
-            e.Property(p => p.Type).HasConversion<string>();
-            e.Property(p => p.Status).HasConversion<string>();
+            projection.HasKey(p => p.ClaimId);
+            projection.Property(p => p.Type).HasConversion<string>();
+            projection.Property(p => p.Status).HasConversion<string>();
         });
 
-        b.Entity<Notification>(e =>
+        modelBuilder.Entity<Notification>(notification =>
         {
-            e.HasIndex(n => n.EventId).IsUnique();
-            e.HasIndex(n => new { n.RecipientId, n.CreatedAt });
+            notification.HasIndex(n => n.EventId).IsUnique();
+            notification.HasIndex(n => new { n.RecipientId, n.CreatedAt });
         });
     }
 
-    /// <summary>
-    /// Transactional outbox: domain events raised by tracked claims are written as outbox rows in
-    /// the same SaveChanges (same transaction) as the state change, so we never commit a change
-    /// without its event or publish an event for a change that rolled back.
-    /// </summary>
-    public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    // Outbox: events are saved in the same transaction as the claim change.
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
-        var claims = ChangeTracker.Entries<Claim>().Select(e => e.Entity).Where(c => c.PendingEvents.Count > 0).ToList();
-        foreach (var claim in claims)
+        var changedClaims = StageOutboxMessages();
+        var saved = base.SaveChanges(acceptAllChangesOnSuccess);
+        changedClaims.ForEach(claim => claim.ClearPendingEvents());
+        return saved;
+    }
+
+    public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        var changedClaims = StageOutboxMessages();
+        var saved = await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+        changedClaims.ForEach(claim => claim.ClearPendingEvents());
+        return saved;
+    }
+
+    private List<Claim> StageOutboxMessages()
+    {
+        var changedClaims = ChangeTracker.Entries<Claim>()
+            .Select(entry => entry.Entity)
+            .Where(claim => claim.PendingEvents.Count > 0)
+            .ToList();
+
+        foreach (var domainEvent in changedClaims.SelectMany(claim => claim.PendingEvents))
         {
-            foreach (var evt in claim.PendingEvents)
+            Outbox.Add(new OutboxMessage
             {
-                Outbox.Add(new OutboxMessage
-                {
-                    EventId = evt.EventId,
-                    EventType = evt.EventType,
-                    Key = evt.Claim.ClaimId.ToString(),
-                    Payload = JsonSerializer.Serialize(ClaimEventMessage.From(evt), MessagingJson.Options),
-                    OccurredAt = evt.OccurredAt,
-                });
-            }
+                EventId = domainEvent.EventId,
+                EventType = domainEvent.EventType,
+                Key = domainEvent.Claim.ClaimId.ToString(),
+                Payload = JsonSerializer.Serialize(ClaimEventMessage.From(domainEvent), MessagingJson.Options),
+                OccurredAt = domainEvent.OccurredAt,
+            });
         }
 
-        var result = await base.SaveChangesAsync(cancellationToken);
-        claims.ForEach(c => c.ClearPendingEvents());
-        return result;
+        return changedClaims;
     }
 }

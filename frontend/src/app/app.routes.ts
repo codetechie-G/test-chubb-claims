@@ -2,8 +2,7 @@ import { inject } from '@angular/core';
 import { Router, Routes } from '@angular/router';
 import { AuthService, requireRole } from './core/auth';
 
-// One Angular app, two audiences: each audience is a lazily loaded feature area behind a
-// role guard, so a claimant never downloads the staff bundle and vice versa.
+// Each role gets its own lazy-loaded area behind a role guard.
 export const routes: Routes = [
   {
     path: 'login',

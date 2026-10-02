@@ -4,50 +4,43 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Claims.Api.Messaging;
 
-/// <summary>
-/// Maintains the <see cref="ClaimProjection"/> read model behind the workload and liability-exposure
-/// dashboards. Idempotent and order-tolerant: a message is applied only if its claim version is
-/// newer than what the projection has already seen.
-/// </summary>
+// Keeps the dashboard projection up to date; ignores events older than what it has seen.
 public sealed class ClaimProjector(ClaimsDbContext db) : IClaimEventHandler
 {
     public const string GroupId = "claims-projector";
 
     public async Task HandleAsync(ClaimEventMessage message, CancellationToken ct)
     {
-        var s = message.Claim;
-        var row = await db.ClaimProjections.FindAsync([s.ClaimId], ct);
+        var snapshot = message.Claim;
+        var row = await db.ClaimProjections.FindAsync([snapshot.ClaimId], ct);
         if (row is null)
         {
-            row = new ClaimProjection { ClaimId = s.ClaimId };
+            row = new ClaimProjection { ClaimId = snapshot.ClaimId };
             db.ClaimProjections.Add(row);
         }
-        else if (row.LastVersion >= s.Version)
+        else if (row.LastVersion >= snapshot.Version)
         {
             return; // duplicate or stale delivery
         }
 
-        row.Reference = s.Reference;
-        row.MarketCode = s.MarketCode;
-        row.Currency = s.Currency;
-        row.Type = s.Type;
-        row.Status = s.Status;
-        row.AssigneeId = s.AssigneeId;
-        row.AssigneeName = s.AssigneeName;
-        row.ReserveAmount = s.ReserveAmount;
-        row.SubmittedAt = s.SubmittedAt;
-        row.ClosedAt = s.Status.IsOpen() ? null : message.OccurredAt;
-        row.LastVersion = s.Version;
+        row.Reference = snapshot.Reference;
+        row.MarketCode = snapshot.MarketCode;
+        row.Currency = snapshot.Currency;
+        row.Type = snapshot.Type;
+        row.Status = snapshot.Status;
+        row.AssigneeId = snapshot.AssigneeId;
+        row.AssigneeName = snapshot.AssigneeName;
+        row.ReserveAmount = snapshot.ReserveAmount;
+        row.SubmittedAt = snapshot.SubmittedAt;
+        row.ClosedAt = snapshot.Status.IsOpen() ? null : message.OccurredAt;
+        row.LastVersion = snapshot.Version;
         row.UpdatedAt = message.OccurredAt;
 
         await db.SaveChangesAsync(ct);
     }
 }
 
-/// <summary>
-/// Turns claim events into claimant-facing notifications (in-app here; email/SMS would hang off
-/// the same consumer). Deduplicated on EventId.
-/// </summary>
+// Writes claimant notifications; deduplicated on EventId.
 public sealed class ClaimantNotifier(ClaimsDbContext db) : IClaimEventHandler
 {
     public const string GroupId = "claimant-notifier";

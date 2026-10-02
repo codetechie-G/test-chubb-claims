@@ -13,11 +13,11 @@ using Scalar.AspNetCore;
 var builder = WebApplication.CreateBuilder(args);
 var config = builder.Configuration;
 
-// --- Persistence ---------------------------------------------------------------------------
+// Persistence
 builder.Services.AddDbContext<ClaimsDbContext>(o => o.UseSqlite(config.GetConnectionString("Claims")));
 builder.Services.AddSingleton(TimeProvider.System);
 
-// --- Messaging (outbox -> transport -> consumer groups) --------------------------------------
+// Messaging: outbox -> transport -> consumer groups
 var messaging = config.GetSection("Messaging").Get<MessagingOptions>() ?? new MessagingOptions();
 builder.Services.AddSingleton(messaging);
 if (string.Equals(messaging.Transport, "Kafka", StringComparison.OrdinalIgnoreCase))
@@ -30,7 +30,7 @@ builder.Services.AddClaimEventHandler<ClaimantNotifier>(ClaimantNotifier.GroupId
 builder.Services.AddHostedService<OutboxDispatcher>();
 builder.Services.AddHostedService<ConsumerHost>();
 
-// --- Auth ----------------------------------------------------------------------------------
+// Auth
 var jwt = config.GetSection("Jwt").Get<JwtOptions>() ?? throw new InvalidOperationException("Jwt config missing");
 builder.Services.AddSingleton(jwt);
 builder.Services.AddSingleton<TokenService>();
@@ -48,7 +48,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJw
 });
 builder.Services.AddAuthorization();
 
-// --- HTTP ----------------------------------------------------------------------------------
+// HTTP
 builder.Services.Configure<ReportingOptions>(config.GetSection("Reporting"));
 builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddProblemDetails();

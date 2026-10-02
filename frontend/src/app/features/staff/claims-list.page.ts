@@ -83,7 +83,7 @@ type Tab = 'queue' | 'mine' | 'all';
           } @empty {
             <tr>
               <td colspan="9" class="muted center">
-                {{ result() ? (tab() === 'queue' ? 'Queue is empty. Nice work.' : 'No claims match.') : 'Loading…' }}
+                {{ result() ? (tab() === 'queue' ? 'Queue is empty.' : 'No claims match.') : 'Loading…' }}
               </td>
             </tr>
           }
@@ -130,8 +130,8 @@ export class StaffClaimsListPage {
   }));
 
   constructor() {
-    poll(this.query, (q) => this.api.list(q), (e) => this.error.set(describeError(e))).subscribe((r) => {
-      this.result.set(r);
+    poll(this.query, (query) => this.api.list(query), (err) => this.error.set(describeError(err))).subscribe((page) => {
+      this.result.set(page);
       this.error.set(null);
     });
   }
@@ -154,7 +154,7 @@ export class StaffClaimsListPage {
       error: (e) => {
         this.error.set(describeError(e));
         this.busyId.set(null);
-        // Most likely someone else picked it up first: drop it from the queue view.
+        // Probably picked up by someone else.
         this.result.update((r) => (r ? { ...r, items: r.items.filter((i) => i.id !== c.id) } : r));
       },
     });

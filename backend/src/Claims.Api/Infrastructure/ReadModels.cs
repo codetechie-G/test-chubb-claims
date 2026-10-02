@@ -2,10 +2,7 @@ using Claims.Api.Domain;
 
 namespace Claims.Api.Infrastructure;
 
-/// <summary>
-/// Pending integration event, written in the same transaction as the claim change and
-/// published to the message bus by <see cref="Messaging.OutboxDispatcher"/>.
-/// </summary>
+// Event waiting to be published by OutboxDispatcher.
 public class OutboxMessage
 {
     public long Id { get; set; } // monotonic: preserves publish order
@@ -19,10 +16,7 @@ public class OutboxMessage
     public string? LastError { get; set; }
 }
 
-/// <summary>
-/// Read model owned by the exposure/workload projector (a Kafka consumer). Denormalised so
-/// dashboards never query the transactional claim tables.
-/// </summary>
+// Dashboard read model, written only by ClaimProjector.
 public class ClaimProjection
 {
     public Guid ClaimId { get; set; }
